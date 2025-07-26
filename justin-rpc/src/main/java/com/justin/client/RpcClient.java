@@ -2,6 +2,9 @@ package com.justin.client;
 
 import com.justin.config.MarkAsRpc;
 import com.justin.config.RemoteService;
+import com.justin.handlers.JsonCallMessageEncoder;
+import com.justin.handlers.JsonMessageDecoder;
+import com.justin.handlers.RpcClientMessageHandler;
 import com.justin.model.MessagePayload;
 import com.justin.model.MessageType;
 import com.justin.model.RpcMethodDescriptor;
@@ -31,6 +34,7 @@ import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 // Core component
 // Two main tasks: 1. processing RpcRequest; 2. scann all RPC methods
@@ -90,6 +94,14 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
         }).start();
 
         logger.info("Client finished initialization process");
+    }
+
+    public void completeRequest(MessagePayload.RpcResponse rpcResponse) {
+        String requestId = rpcResponse.getRequestId();
+
+        CompletableFuture<MessagePayload.RpcResponse> future = requestMap.get(requestId);
+
+        future.complete(rpcResponse);
     }
 
     // Process the RPC request from the consumer
@@ -174,6 +186,10 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 String methodName = method.getName();
+                if (methodName.equals("toString")) return "Proxy[" + this.getClass().getSimpleName() + "]";
+                if (methodName.equals("hashCode")) return System.identityHashCode(proxy);
+                if (methodName.equals("equals")) return proxy == args[0];
+
                 Class<?>[] parameterTypes = method.getParameterTypes();
 
                 String[] paramTypes = new String[parameterTypes.length];
@@ -192,18 +208,21 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
                         .setParamTypes(paramTypes)
                         .setParams(args)
                         .setRequestMethodName(methodName)
-                        .setReturnValueType(method.getReturnType().getName())
+                        .setReturnValueType(method.getReturnType().getSimpleName())
                         .setRequestedClassName(proxyTarget.getName()).build();
 
                 CompletableFuture<MessagePayload.RpcResponse> future = new CompletableFuture<>();
                 requestMap.put(requestId, future);
                 channel.writeAndFlush(messagePayload);
                 //wait for the result to come back
-                MessagePayload.RpcResponse rpcResponse = future.get(); // blocking and waiting
-                //
-                requestMap.remove(requestId);
-
-                return rpcResponse.getResult();
+                try {
+                    MessagePayload.RpcResponse rpcResponse = future.get(5, TimeUnit.SECONDS); // blocking and waiting
+                    requestMap.remove(requestId);
+                    return rpcResponse.getResult();
+                }catch (Exception e) {
+                    // Fallback mechanism is going to be added here.
+                    return "Timeout!";
+                }
             }
         });
     }
@@ -217,14 +236,19 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            // todo
+                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
+                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new RpcClientMessageHandler(RpcClient.this));
                         }
                     });
 
             ChannelFuture cf = bootstrap.connect(host, Integer.parseInt(port)).addListener( f -> {
                 if(f.isSuccess()){
+                    logger.info("Client ID: {} connected to server", clientId);
                     ChannelFuture channelFuture = (ChannelFuture) f;
                     this.channel = channelFuture.channel();
+                    //Send registration message to the server
+                    sendRegistrationRequest();
                 } else {
                     logger.error("Failed to connect to Server, trying to reconnect again");
                     //reconect
@@ -235,6 +259,15 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private void sendRegistrationRequest() {
+        MessagePayload messagePayload = new MessagePayload
+                .RequestMessageBuilder()
+                .clientId(clientId)
+                .setMessageType(MessageType.REGISTER)
+                .build();
+        channel.writeAndFlush(messagePayload);
     }
 
     //todo

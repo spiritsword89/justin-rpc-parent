@@ -4,13 +4,20 @@ import com.justin.handlers.JsonCallMessageEncoder;
 import com.justin.handlers.JsonMessageDecoder;
 import com.justin.handlers.RpcServerMessageHandler;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import org.springframework.beans.factory.annotation.Value;
 
 public class RpcServer {
+
+    @Value("${justin.rpc.server.port}")
+    private int port;
+    @Value("${justin.rpc.server.worker}")
+    private int workerGroupSize;
+    @Value("${justin.rpc.server.backlog}")
+    private int backlogSize;
 
     public void startServer() throws InterruptedException {
         new Thread(new Runnable() {
@@ -19,21 +26,18 @@ public class RpcServer {
                 start();
             }
         }).start();
-
-        System.out.println("Server started");
-        Thread.sleep(20000);
     }
 
     private void start() {
         NioEventLoopGroup boss = new NioEventLoopGroup();
-        NioEventLoopGroup worker = new NioEventLoopGroup();
+        NioEventLoopGroup worker = new NioEventLoopGroup(workerGroupSize);
 
         try {
             ServerBootstrap serverBootstrap = new ServerBootstrap();
             serverBootstrap
                     .group(boss,worker)
                     .channel(NioServerSocketChannel.class)
-                    .option(ChannelOption.SO_BACKLOG, 128)
+                    .option(ChannelOption.SO_BACKLOG, backlogSize)
                     .childOption(ChannelOption.SO_KEEPALIVE, true).childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
@@ -42,7 +46,7 @@ public class RpcServer {
                             socketChannel.pipeline().addLast(new RpcServerMessageHandler());
                         }
                     });
-            ChannelFuture future = serverBootstrap.bind(11111).sync();
+            ChannelFuture future = serverBootstrap.bind(port).sync();
             System.out.println("Server bind to port 11111");
             future.channel().closeFuture().sync();
         } catch (InterruptedException e) {

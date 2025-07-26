@@ -26,8 +26,10 @@ public class RpcClientMessageHandler extends SimpleChannelInboundHandler<Message
         }
     }
 
+    // complete the entire RPC call
     private void completeRequest(MessagePayload messagePayload) {
-
+        MessagePayload.RpcResponse response = (MessagePayload.RpcResponse) messagePayload.getPayload();
+        rpcClient.completeRequest(response);
     }
 
     private void processRequestAndGenerateResponse(MessagePayload messagePayload) {

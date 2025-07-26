@@ -117,7 +117,7 @@ public class MessagePayload implements Serializable {
         }
 
         public MessagePayload build() {
-            return new MessagePayload();
+            return new MessagePayload(this);
         }
     }
 

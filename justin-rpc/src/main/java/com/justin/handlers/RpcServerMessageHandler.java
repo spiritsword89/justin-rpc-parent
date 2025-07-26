@@ -6,9 +6,13 @@ import com.justin.server.ClientSessionManager;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Core handler to process the message
 public class RpcServerMessageHandler extends SimpleChannelInboundHandler<MessagePayload> {
+    private final Logger logger = LoggerFactory.getLogger(RpcServerMessageHandler.class);
+
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, MessagePayload messagePayload) throws Exception {
         // RpcRequest and RpcResponse
@@ -63,6 +67,7 @@ public class RpcServerMessageHandler extends SimpleChannelInboundHandler<Message
     }
 
     private void registerClientIntoSession(MessagePayload messagePayload, Channel channel) {
+        logger.info("Client id {} is now registering with Netty Server",  messagePayload.getClientId());
         ClientSessionManager.register(messagePayload.getClientId(), channel);
     }
 }

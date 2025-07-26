@@ -1,0 +1,13 @@
+server:
+  port: 8889
+
+justin:
+  rpc:
+    server:
+      port: 11111
+      boss: 1
+      worker: 3
+      backlog: 128
+    client:
+      worker: 3
+      host: 127.0.0.1
