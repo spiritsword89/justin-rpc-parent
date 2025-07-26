@@ -10,6 +10,9 @@
     <packaging>pom</packaging>
     <modules>
         <module>justin-rpc</module>
+        <module>justin-rpc-common</module>
+        <module>justin-rpc-user</module>
+        <module>justin-rpc-booking</module>
     </modules>
 
     <parent>

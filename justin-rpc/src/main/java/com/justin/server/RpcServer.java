@@ -1,6 +1,10 @@
 package com.justin.server;
 
+import com.justin.handlers.JsonCallMessageEncoder;
+import com.justin.handlers.JsonMessageDecoder;
+import com.justin.handlers.RpcServerMessageHandler;
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -33,7 +37,9 @@ public class RpcServer {
                     .childOption(ChannelOption.SO_KEEPALIVE, true).childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            //todo
+                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
+                            socketChannel.pipeline().addLast(new RpcServerMessageHandler());
                         }
                     });
             ChannelFuture future = serverBootstrap.bind(11111).sync();
