@@ -2,6 +2,8 @@ package com.justin.client;
 
 import com.justin.config.MarkAsRpc;
 import com.justin.config.RemoteService;
+import com.justin.model.MessagePayload;
+import com.justin.model.MessageType;
 import com.justin.model.RpcMethodDescriptor;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -13,21 +15,31 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AssignableTypeFilter;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 // Core component
 // Two main tasks: 1. processing RpcRequest; 2. scann all RPC methods
-public class RpcClient implements SmartInitializingSingleton {
+public class RpcClient implements SmartInitializingSingleton, ApplicationContextAware {
     private static final Logger logger = LoggerFactory.getLogger(RpcClient.class);
 
     private NioEventLoopGroup worker = new NioEventLoopGroup();
+
+    private ApplicationContext applicationContext;
 
     @Value("${justin.rpc.server.port}")
     private String port;
@@ -46,8 +58,26 @@ public class RpcClient implements SmartInitializingSingleton {
 
     private Map<String, Method> classMethodsMap = new HashMap<>();
 
+    private Map<String, CompletableFuture<MessagePayload.RpcResponse>> requestMap = new ConcurrentHashMap<>();
+
     public RpcClient() {
 
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
+
+    public String[] getScanPackages() {
+        return scanPackages;
+    }
+
+    public void setScanPackages(String[] scanPackages) {
+        this.scanPackages = scanPackages;
     }
 
     @PostConstruct
@@ -60,6 +90,122 @@ public class RpcClient implements SmartInitializingSingleton {
         }).start();
 
         logger.info("Client finished initialization process");
+    }
+
+    // Process the RPC request from the consumer
+    public void processRequest(MessagePayload messagePayload) {
+        MessagePayload.RpcRequest rpcRequest = (MessagePayload.RpcRequest) messagePayload.getPayload();
+
+        // Rpc interface full class name
+        String requestClassName = rpcRequest.getRequestClassName();
+
+        String methodName = rpcRequest.getRequestMethodSimpleName();
+        String[] paramsTypes = rpcRequest.getParamsTypes();
+        Object[] params = rpcRequest.getParams();
+        String returnValueType = rpcRequest.getReturnValueType();
+
+        //Generate Method Id unique
+        String methodId = RpcMethodDescriptor.generateMethodId(methodName, paramsTypes.length, paramsTypes, returnValueType);
+
+        // find out the request class
+        // In the RPC request call, the message carries the RPC interface (BookingDetailService)
+        // Using the interface to find any implementation (Find BookingDetailServiceImpl)
+
+        Class<?> requestClass = null;
+        try {
+            requestClass = Class.forName(requestClassName);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+
+        // We need to use this Class object to find out the implementation.
+        Map<String, ?> beansOfType = applicationContext.getBeansOfType(requestClass);
+
+        if(beansOfType.isEmpty()) {
+            throw new RuntimeException("Class of implementation is not found");
+        }
+
+        // Find two implementations
+        if(beansOfType.size() > 1) {
+            throw new RuntimeException("Multiple implementations of request class found");
+        }
+
+        Object requestedClassBean = beansOfType.values().iterator().next();
+
+        String fullRequestClassBeanName = requestedClassBean.getClass().getName();
+
+        // Key: Method ID
+        Map<String, RpcMethodDescriptor> methodDescriptorMap = methodsHashMap.get(fullRequestClassBeanName);
+
+        RpcMethodDescriptor rpcMethodDescriptor = methodDescriptorMap.get(methodId);
+
+        if(rpcMethodDescriptor == null) {
+            throw new RuntimeException("No RPC method supported");
+        }
+
+        // Very strict validation process shall be considered.
+        // How about security? What if the method requires token check?
+        if(rpcMethodDescriptor.getMethodName().equals(rpcRequest.getRequestMethodSimpleName())
+                && rpcMethodDescriptor.getNumOfParams() == paramsTypes.length) {
+            Method method = classMethodsMap.get(methodId);
+
+            try {
+                Object result = method.invoke(requestedClassBean, params);
+
+                // Write the result back to the consumer
+                // Build a RpcResponse
+
+                MessagePayload responseMessage = new MessagePayload.RequestMessageBuilder()
+                        .setRequestId(rpcRequest.getRequestId())
+                        .setMessageType(MessageType.RESPONSE)
+                        .setReturnValue(result).build();
+
+                channel.writeAndFlush(responseMessage);
+
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    @SuppressWarnings("all")
+    public <T> T generate(Class<T> proxyTarget, String requestClientId) {
+        return (T)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class[]{proxyTarget}, new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                String methodName = method.getName();
+                Class<?>[] parameterTypes = method.getParameterTypes();
+
+                String[] paramTypes = new String[parameterTypes.length];
+
+                for(int i = 0; i < parameterTypes.length; i++) {
+                    paramTypes[i] = parameterTypes[i].getSimpleName(); //get simple name
+                }
+
+                String requestId = UUID.randomUUID().toString();
+
+                MessagePayload messagePayload = new MessagePayload.RequestMessageBuilder()
+                        .clientId(clientId)
+                        .setMessageType(MessageType.CALL)
+                        .setRequestId(requestId)
+                        .setRequestClientId(requestClientId)
+                        .setParamTypes(paramTypes)
+                        .setParams(args)
+                        .setRequestMethodName(methodName)
+                        .setReturnValueType(method.getReturnType().getName())
+                        .setRequestedClassName(proxyTarget.getName()).build();
+
+                CompletableFuture<MessagePayload.RpcResponse> future = new CompletableFuture<>();
+                requestMap.put(requestId, future);
+                channel.writeAndFlush(messagePayload);
+                //wait for the result to come back
+                MessagePayload.RpcResponse rpcResponse = future.get(); // blocking and waiting
+                //
+                requestMap.remove(requestId);
+
+                return rpcResponse.getResult();
+            }
+        });
     }
 
     private void connect() {
@@ -96,6 +242,7 @@ public class RpcClient implements SmartInitializingSingleton {
 
     }
 
+    // RPC method scanning process
     @Override
     public void afterSingletonsInstantiated() {
         // right timing to scann all RPC methods here
@@ -144,5 +291,10 @@ public class RpcClient implements SmartInitializingSingleton {
                 }
             }
         }
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
     }
 }

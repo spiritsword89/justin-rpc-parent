@@ -2,8 +2,10 @@ package com.justin_demo.booking.service;
 
 import com.justin.cmmon.rpc.booking.BookingDetailService;
 import com.justin.config.MarkAsRpc;
+import org.springframework.stereotype.Component;
 
 //we do not accept interface or abstract
+@Component
 public class BookingDetailServiceImpl implements BookingDetailService {
 
     @MarkAsRpc

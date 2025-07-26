@@ -13,6 +13,21 @@ public class RpcMethodDescriptor {
     private boolean hasReturnValue;
     private String returnValueType; // full class name
 
+    public static String generateMethodId(String methodName, int paramsCount, String[] paramTypeSimpleNames, String returnValueTypeSimpleName) {
+        // id = method name + "." + param counts + "." + param type name + "." + return type name
+        String id = String.join(".", methodName, String.valueOf(paramsCount));
+
+        for (String paramTypeSimpleName: paramTypeSimpleNames) {
+            id = String.join(".", id,  paramTypeSimpleName);
+        }
+
+        if(returnValueTypeSimpleName != null) {
+            id = String.join(".", id, returnValueTypeSimpleName);
+        }
+
+        return id;
+    }
+
     public static RpcMethodDescriptor build(Method method) {
         RpcMethodDescriptor md = new RpcMethodDescriptor();
         Class<?>[] paramTypes = method.getParameterTypes();
