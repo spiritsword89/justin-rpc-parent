@@ -2,6 +2,7 @@ package com.justin.client;
 
 import com.justin.config.MarkAsRpc;
 import com.justin.config.RemoteService;
+import com.justin.handlers.ClientHeartbeatHandler;
 import com.justin.handlers.JsonCallMessageEncoder;
 import com.justin.handlers.JsonMessageDecoder;
 import com.justin.handlers.RpcClientMessageHandler;
@@ -15,6 +16,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -238,25 +240,27 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline().addLast(new JsonMessageDecoder());
                             socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new IdleStateHandler(0, 5, 0, TimeUnit.SECONDS));
+                            socketChannel.pipeline().addLast(new ClientHeartbeatHandler());
                             socketChannel.pipeline().addLast(new RpcClientMessageHandler(RpcClient.this));
                         }
                     });
 
-            ChannelFuture cf = bootstrap.connect(host, Integer.parseInt(port)).addListener( f -> {
+            bootstrap.connect(host, Integer.parseInt(port)).addListener( f -> {
                 if(f.isSuccess()){
                     logger.info("Client ID: {} connected to server", clientId);
                     ChannelFuture channelFuture = (ChannelFuture) f;
                     this.channel = channelFuture.channel();
                     //Send registration message to the server
                     sendRegistrationRequest();
+                    channelFuture.channel().closeFuture().sync(); //blocking
                 } else {
                     logger.error("Failed to connect to Server, trying to reconnect again");
                     //reconect
                     reconnect();
                 }
             });
-            cf.channel().closeFuture().sync();
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -270,9 +274,9 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
         channel.writeAndFlush(messagePayload);
     }
 
-    //todo
     public void reconnect() {
-
+        logger.info("Client {} is now being reconnected", clientId);
+        worker.schedule(this::connect, 5, TimeUnit.SECONDS);
     }
 
     // RPC method scanning process

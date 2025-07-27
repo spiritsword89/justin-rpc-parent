@@ -3,12 +3,16 @@ package com.justin.server;
 import com.justin.handlers.JsonCallMessageEncoder;
 import com.justin.handlers.JsonMessageDecoder;
 import com.justin.handlers.RpcServerMessageHandler;
+import com.justin.handlers.ServerHeartbeatHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.springframework.beans.factory.annotation.Value;
+
+import java.util.concurrent.TimeUnit;
 
 public class RpcServer {
 
@@ -32,6 +36,10 @@ public class RpcServer {
         NioEventLoopGroup boss = new NioEventLoopGroup();
         NioEventLoopGroup worker = new NioEventLoopGroup(workerGroupSize);
 
+        //readerIdleTime: triggers an event if nothing is read from the channel in this time
+        //writerIdleTime: triggers an event if nothing is written to this channel in this time
+        //allIdleTime: trigger event if neither read nor write occurs in this time
+
         try {
             ServerBootstrap serverBootstrap = new ServerBootstrap();
             serverBootstrap
@@ -43,6 +51,12 @@ public class RpcServer {
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
                             socketChannel.pipeline().addLast(new JsonMessageDecoder());
+
+                            //if no read happens in 10 seconds, it triggers a user event.
+                            //we need to provide a hearbeat handler to catch and process this event.
+                            //if no read happens in 10 seconds, an event is triggered, we consider this connection is dead.
+                            socketChannel.pipeline().addLast(new IdleStateHandler(10, 0, 0, TimeUnit.SECONDS));
+                            socketChannel.pipeline().addLast(new ServerHeartbeatHandler());
                             socketChannel.pipeline().addLast(new RpcServerMessageHandler());
                         }
                     });

@@ -3,7 +3,9 @@ package com.justin.server;
 import com.justin.model.MessagePayload;
 import io.netty.channel.Channel;
 
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ClientSessionManager {
@@ -29,5 +31,22 @@ public class ClientSessionManager {
 
     public static MessagePayload getRequestClientMessage(String requestId) {
         return requestMap.get(requestId);
+    }
+
+    public static void clearByClientId(String clientId) {
+        registerClients.remove(clientId);
+
+        Set<Map.Entry<String, MessagePayload>> entries = requestMap.entrySet();
+
+        Iterator<Map.Entry<String, MessagePayload>> iterator = entries.iterator();
+
+        while(iterator.hasNext()) {
+            Map.Entry<String, MessagePayload> next = iterator.next();
+            MessagePayload messagePayload = next.getValue();
+
+            if(messagePayload.getClientId().equals(clientId)) {
+                iterator.remove();
+            }
+        }
     }
 }
