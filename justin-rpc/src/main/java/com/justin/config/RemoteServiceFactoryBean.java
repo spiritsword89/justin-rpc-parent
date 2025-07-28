@@ -1,11 +1,12 @@
 package com.justin.config;
 
-import com.justin.client.RpcClient;
+import com.justin.client.RemoteClient;
 import com.justin.model.MessagePayload;
 import com.justin.model.MessageType;
 import org.springframework.beans.factory.FactoryBean;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.UUID;
@@ -26,11 +27,21 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
 
     private Class<T> rpcInterfaceClass;
 
-    private RpcClient rpcClient;
+    private Class<? extends T> fallbackClass;
+
+    private RemoteClient rpcClient;
 
     //constructor
     public RemoteServiceFactoryBean(Class<T> rpcInterfaceClass) {
         this.rpcInterfaceClass = rpcInterfaceClass;
+    }
+
+    public Class<? extends T> getFallbackClass() {
+        return fallbackClass;
+    }
+
+    public void setFallbackClass(Class<? extends T> fallbackClass) {
+        this.fallbackClass = fallbackClass;
     }
 
     public String getRequestClientId() {
@@ -49,11 +60,11 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
         this.rpcInterfaceClass = rpcInterfaceClass;
     }
 
-    public RpcClient getRpcClient() {
+    public RemoteClient getRpcClient() {
         return rpcClient;
     }
 
-    public void setRpcClient(RpcClient rpcClient) {
+    public void setRpcClient(RemoteClient rpcClient) {
         this.rpcClient = rpcClient;
     }
 
@@ -99,10 +110,23 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
                     return rpcResponse.getResult();
                 }catch (Exception e) {
                     // Fallback mechanism is going to be added here.
-                    return "Timeout!";
+                    // The fallback needs to do the following:
+                    // return a default value
+                    // executes an alternative method
+                    // logs the error and continues
+                    return triggerCallback(method, args);
                 }
             }
         });
+    }
+
+    private Object triggerCallback(Method method, Object[] args) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        if(fallbackClass != null) {
+            Object fallbackBean = fallbackClass.getConstructor().newInstance();
+            Method fallbackMethod = fallbackClass.getMethod(method.getName(), method.getParameterTypes());
+            return fallbackMethod.invoke(fallbackBean, args);
+        }
+        return "Timeout.";
     }
 
     @Override

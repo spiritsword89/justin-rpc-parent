@@ -39,6 +39,11 @@ public class RpcServiceScanPostProcessor implements BeanDefinitionRegistryPostPr
                         if(declaredField.isAnnotationPresent(AutoRemoteInjection.class)) {
                             AutoRemoteInjection annotation = declaredField.getAnnotation(AutoRemoteInjection.class);
                             RemoteServiceFieldHolder holder = new RemoteServiceFieldHolder(declaredField, annotation.requestClientId());
+
+                            if(annotation.fallbackClass() != null) {
+                                holder.setFallbackClass(annotation.fallbackClass());
+                            }
+
                             targetFields.add(holder);
                         }
                     }
@@ -60,6 +65,10 @@ public class RpcServiceScanPostProcessor implements BeanDefinitionRegistryPostPr
 
                 beanDefinition.getPropertyValues().addPropertyValue("requestClientId", holder.getRequestClientId());
                 beanDefinition.getPropertyValues().addPropertyValue("rpcClient", new RuntimeBeanReference(RpcClient.class));
+
+                if(holder.getFallbackClass() != null) {
+                    beanDefinition.getPropertyValues().addPropertyValue("fallbackClass", holder.getFallbackClass());
+                }
 
                 registry.registerBeanDefinition(holder.getAlias(), beanDefinition);
             }
