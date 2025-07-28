@@ -3,7 +3,6 @@ package com.justin.config;
 import com.justin.client.RpcClient;
 import com.justin.model.RemoteServiceFieldHolder;
 import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
