@@ -18,7 +18,7 @@ public class UserDetailServiceImpl implements UserDetailService {
 
     // It shall be done at the phase when spring application context is ready.
     @Autowired
-    @AutoRemoteInjection(requestClientId = "demo-booking", fallbackClass = MyUserBookingDetailService.class)
+//    @AutoRemoteInjection(requestClientId = "demo-booking", fallbackClass = MyUserBookingDetailService.class)
     private BookingDetailService bookingDetailService;
 
     @Override

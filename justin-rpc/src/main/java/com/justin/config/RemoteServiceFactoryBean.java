@@ -90,6 +90,12 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
 
                 String requestId = UUID.randomUUID().toString();
 
+                Class<?> remoteRpcInterface = getRemoteRpcInterface(rpcInterfaceClass);
+
+                if(remoteRpcInterface == null) {
+                    return triggerFallback(method, args);
+                }
+
                 MessagePayload messagePayload = new MessagePayload.RequestMessageBuilder()
                         .clientId(rpcClient.getClientId())
                         .setMessageType(MessageType.CALL)
@@ -99,7 +105,7 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
                         .setParams(args)
                         .setRequestMethodName(methodName)
                         .setReturnValueType(method.getReturnType().getSimpleName())
-                        .setRequestedClassName(rpcInterfaceClass.getName()).build();
+                        .setRequestedClassName(remoteRpcInterface.getName()).build();
 
                 CompletableFuture<MessagePayload.RpcResponse> future = new CompletableFuture<>();
                 rpcClient.sendRequest(messagePayload, requestId, future);
@@ -114,13 +120,30 @@ public class RemoteServiceFactoryBean<T> implements FactoryBean<T> {
                     // return a default value
                     // executes an alternative method
                     // logs the error and continues
-                    return triggerCallback(method, args);
+                    return triggerFallback(method, args);
                 }
             }
         });
     }
 
-    private Object triggerCallback(Method method, Object[] args) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    private Class<?> getRemoteRpcInterface(Class<?> targetInterface) {
+        // Find out the second level interface which directly extends from the RemoteService
+        for(Class<?> interfaceClass : targetInterface.getInterfaces()) {
+            if(interfaceClass.equals(RemoteService.class)) {
+                return targetInterface;
+            }
+
+            Class<?> found = getRemoteRpcInterface(interfaceClass);
+
+            if(found != null) {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private Object triggerFallback(Method method, Object[] args) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         if(fallbackClass != null) {
             Object fallbackBean = fallbackClass.getConstructor().newInstance();
             Method fallbackMethod = fallbackClass.getMethod(method.getName(), method.getParameterTypes());

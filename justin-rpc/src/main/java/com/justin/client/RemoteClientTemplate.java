@@ -1,6 +1,7 @@
 package com.justin.client;
 
 
+import com.justin.config.AutoRemoteInjection;
 import com.justin.config.MarkAsRpc;
 import com.justin.config.RemoteService;
 import com.justin.model.MessagePayload;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.core.type.filter.AssignableTypeFilter;
 
 import java.lang.reflect.InvocationTargetException;
