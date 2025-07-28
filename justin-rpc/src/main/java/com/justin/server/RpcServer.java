@@ -55,7 +55,7 @@ public class RpcServer {
                             //if no read happens in 10 seconds, it triggers a user event.
                             //we need to provide a hearbeat handler to catch and process this event.
                             //if no read happens in 10 seconds, an event is triggered, we consider this connection is dead.
-                            socketChannel.pipeline().addLast(new IdleStateHandler(10, 0, 0, TimeUnit.SECONDS));
+                            socketChannel.pipeline().addLast(new IdleStateHandler(1000, 0, 0, TimeUnit.SECONDS));
                             socketChannel.pipeline().addLast(new ServerHeartbeatHandler());
                             socketChannel.pipeline().addLast(new RpcServerMessageHandler());
                         }

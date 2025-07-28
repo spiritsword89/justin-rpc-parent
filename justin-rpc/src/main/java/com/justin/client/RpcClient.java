@@ -229,6 +229,15 @@ public class RpcClient implements SmartInitializingSingleton, ApplicationContext
         });
     }
 
+    public void sendRequest(Object request, String requestId, CompletableFuture<MessagePayload.RpcResponse> future) {
+        requestMap.put(requestId, future);
+        channel.writeAndFlush(request);
+    }
+
+    public void didCatchResponse(MessagePayload.RpcResponse response) {
+        requestMap.remove(response.getRequestId());
+    }
+
     private void connect() {
         try {
             Bootstrap bootstrap = new Bootstrap();
