@@ -1,9 +1,6 @@
 package com.justin.server;
 
-import com.justin.handlers.JsonCallMessageEncoder;
-import com.justin.handlers.JsonMessageDecoder;
-import com.justin.handlers.RpcServerMessageHandler;
-import com.justin.handlers.ServerHeartbeatHandler;
+import com.justin.handlers.*;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -49,9 +46,10 @@ public class RpcServer {
                     .childOption(ChannelOption.SO_KEEPALIVE, true).childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
-                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
-
+//                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+//                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
+                            socketChannel.pipeline().addLast(new KryoCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new KryoMessageDecoder());
                             //if no read happens in 10 seconds, it triggers a user event.
                             //we need to provide a hearbeat handler to catch and process this event.
                             //if no read happens in 10 seconds, an event is triggered, we consider this connection is dead.

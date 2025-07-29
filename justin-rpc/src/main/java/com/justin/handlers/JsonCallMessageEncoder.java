@@ -29,6 +29,13 @@ public class JsonCallMessageEncoder extends MessageToByteEncoder<MessagePayload>
         byte[] jsonBytes = JSON.toJSONBytes(messagePayload);
 
         // next 4 bytes = 1 int = the length of the message
+        // Kryo
+        // Why not Use JSON
+        // It is not optimized for speed or size.
+
+        // Advantages:
+        // 1. Faster serialization: 10x faster or 100x faster than JSON.
+        // 2. Smaller messages: less data transferred means faster network communication
         byteBuf.writeInt(jsonBytes.length);
 
         //the remaining is the message itself

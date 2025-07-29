@@ -1,9 +1,6 @@
 package com.justin.client;
 
-import com.justin.handlers.ClientHeartbeatHandler;
-import com.justin.handlers.JsonCallMessageEncoder;
-import com.justin.handlers.JsonMessageDecoder;
-import com.justin.handlers.RpcClientMessageHandler;
+import com.justin.handlers.*;
 import com.justin.model.MessagePayload;
 import com.justin.model.MessageType;
 import io.netty.bootstrap.Bootstrap;
@@ -77,8 +74,10 @@ public class RpcClient extends RemoteClientTemplate {
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
-                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
-                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+//                            socketChannel.pipeline().addLast(new JsonMessageDecoder());
+//                            socketChannel.pipeline().addLast(new JsonCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new KryoCallMessageEncoder());
+                            socketChannel.pipeline().addLast(new KryoMessageDecoder());
                             socketChannel.pipeline().addLast(new IdleStateHandler(0, 5, 0, TimeUnit.SECONDS));
                             socketChannel.pipeline().addLast(new ClientHeartbeatHandler());
                             socketChannel.pipeline().addLast(new RpcClientMessageHandler(RpcClient.this));
